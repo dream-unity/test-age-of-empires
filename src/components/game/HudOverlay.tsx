@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Engine, HudSnapshot } from "@/game/engine";
+import { assetUrl } from "@/lib/asset";
 import { Pause, Volume2, VolumeX } from "lucide-react";
 
 type Props = {
@@ -14,10 +15,10 @@ type Props = {
 };
 
 const RES: { key: "food" | "wood" | "gold" | "stone"; src: string; label: string }[] = [
-  { key: "food", src: "/game/ui/food.png", label: "Food" },
-  { key: "wood", src: "/game/ui/wood.png", label: "Wood" },
-  { key: "gold", src: "/game/ui/gold.png", label: "Gold" },
-  { key: "stone", src: "/game/ui/stone.png", label: "Stone" },
+  { key: "food", src: assetUrl("game/ui/food.png"), label: "Food" },
+  { key: "wood", src: assetUrl("game/ui/wood.png"), label: "Wood" },
+  { key: "gold", src: assetUrl("game/ui/gold.png"), label: "Gold" },
+  { key: "stone", src: assetUrl("game/ui/stone.png"), label: "Stone" },
 ];
 
 export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onResume, onQuit }: Props) {
@@ -157,7 +158,7 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
                 {a.sprite && (
                   <span className="relative size-8 shrink-0 overflow-hidden rounded-sm bg-ink/60">
                     <img
-                      src={`/game/sprites/${a.sprite}.png`}
+                      src={assetUrl(`game/sprites/${a.sprite}.png`)}
                       alt=""
                       className={
                         a.id.startsWith("train:")

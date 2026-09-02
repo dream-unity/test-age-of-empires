@@ -1,6 +1,8 @@
 # Dawn of Empires
 
-A browser real-time strategy game in the spirit of *Age of Empires* (1997). Gather food, wood, gold and stone. Raise houses and barracks. Advance through four ages. Train infantry, archers, cavalry, priests and siege, then raze the enemy Town Center.
+A **playable in-browser** real-time strategy game in the spirit of *Age of Empires* (1997). Gather food, wood, gold and stone. Raise houses and barracks. Advance through four ages. Train infantry, archers, cavalry, priests and siege, then raze the enemy Town Center.
+
+**Play now:** [https://dream-unity.github.io/test-age-of-empires/](https://dream-unity.github.io/test-age-of-empires/)
 
 This is an original homage — not the commercial game, and not affiliated with Microsoft or Ensemble Studios.
 
@@ -8,19 +10,21 @@ This is an original homage — not the commercial game, and not affiliated with 
 
 ![Gameplay](docs/gameplay.png)
 
-## Play
+## Play locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the printed local URL (the dev server listens on port 8080). The title screen lets you pick a civilization, difficulty, a three-mission campaign, or a random map.
+Then open the printed local URL. The title screen lets you pick a civilization, difficulty, a three-mission campaign, or a random map.
 
 ```bash
 npm run typecheck
 npm run build
 ```
+
+GitHub Pages is built automatically from `main` (`npm run build:pages`).
 
 ## How it plays
 
@@ -69,7 +73,7 @@ Random Map is a seeded duel on a lakes-and-forests board. Destroy the enemy Town
 
 ## Architecture
 
-TanStack Start + React overlay HUD, custom HTML5 Canvas engine.
+Vite + React overlay HUD, custom HTML5 Canvas engine. Static build — no server required at runtime.
 
 ```
 src/game/engine.ts     simulation, render, input, AI, fog of war

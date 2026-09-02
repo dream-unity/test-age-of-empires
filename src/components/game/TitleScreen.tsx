@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { CIVS, MISSIONS, type CivId } from "@/game/catalog";
+import { assetUrl } from "@/lib/asset";
 
 type Props = {
   civ: CivId;
@@ -32,7 +33,7 @@ export function TitleScreen({
   return (
     <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-ink text-parchment">
       <img
-        src="/game/title.jpg"
+        src={assetUrl("game/title.jpg")}
         alt=""
         className="absolute inset-0 h-full w-full object-cover"
       />

@@ -24,6 +24,7 @@ import {
 import { astar, nearestWalkable, type Grid } from "./pathfind";
 import { generateMap, tileCenter, type MapKind } from "./mapgen";
 import { audio } from "./audio";
+import { assetUrl } from "@/lib/asset";
 
 export type GameConfig = {
   mode: "campaign" | "skirmish";
@@ -139,7 +140,10 @@ function loadImg(src: string): Promise<HTMLImageElement | null> {
 }
 
 export async function loadAssets(): Promise<Assets> {
-  const man = (await fetch("/game/manifest.json").then((r) => r.json())) as {
+  const man = (await fetch(assetUrl("game/manifest.json")).then((r) => {
+    if (!r.ok) throw new Error(`Could not load game manifest (${r.status})`);
+    return r.json();
+  })) as {
     tiles: Record<string, string>;
     sheets: Record<string, { src: string; rows: number; cols: number }>;
     singles: Record<string, string>;
@@ -151,19 +155,25 @@ export async function loadAssets(): Promise<Assets> {
   const ui: Assets["ui"] = {};
   await Promise.all([
     ...Object.entries(man.tiles).map(async ([k, src]) => {
-      tiles[k] = await loadImg(src);
+      tiles[k] = await loadImg(assetUrl(src));
     }),
     ...Object.entries(man.sheets).map(async ([k, s]) => {
-      const img = await loadImg(s.src);
+      const img = await loadImg(assetUrl(s.src));
       sheets[k] = img ? { img, rows: s.rows, cols: s.cols } : null;
     }),
     ...Object.entries(man.singles).map(async ([k, src]) => {
-      singles[k] = await loadImg(src);
+      singles[k] = await loadImg(assetUrl(src));
     }),
     ...Object.entries(man.ui).map(async ([k, src]) => {
-      ui[k] = await loadImg(src);
+      ui[k] = await loadImg(assetUrl(src));
     }),
   ]);
+  const missing = [
+    ...Object.entries(tiles).filter(([, v]) => !v).map(([k]) => k),
+    ...Object.entries(sheets).filter(([, v]) => !v).map(([k]) => k),
+    ...Object.entries(singles).filter(([, v]) => !v).map(([k]) => k),
+  ];
+  if (missing.length > 8) throw new Error("Could not load game art.");
   return { tiles, sheets, singles, ui };
 }
 
