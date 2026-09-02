@@ -26,7 +26,7 @@ export function nearestWalkable(g: Grid, x: number, y: number): { x: number; y: 
   x = Math.max(0, Math.min(g.w - 1, x | 0));
   y = Math.max(0, Math.min(g.h - 1, y | 0));
   if (!isBlocked(g, x, y)) return { x, y };
-  for (let r = 1; r <= 16; r++) {
+  for (let r = 1; r <= Math.max(g.w, g.h); r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
@@ -54,7 +54,7 @@ export function standNear(
   if (!isBlocked(g, gx, gy) && inb(g, gx, gy)) return { x: gx, y: gy };
   let best: { x: number; y: number } | null = null;
   let bestD = 1e9;
-  for (let r = 1; r <= 14; r++) {
+  for (let r = 1; r <= Math.max(g.w, g.h); r++) {
     let found = false;
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
@@ -154,7 +154,7 @@ export function astar(
   const gi = idx(g, gx, gy);
   let found = false;
   let expanded = 0;
-  while (heapN.length && expanded < 4000) {
+  while (heapN.length && expanded < n) {
     const cur = pop();
     if (closed[cur]) continue;
     closed[cur] = 1;
@@ -188,46 +188,5 @@ export function astar(
     c = came[c];
   }
   path.reverse();
-  return smooth(g, path);
-}
-
-function hasLos(g: Grid, x0: number, y0: number, x1: number, y1: number) {
-  let dx = Math.abs(x1 - x0);
-  let dy = Math.abs(y1 - y0);
-  let x = x0;
-  let y = y0;
-  const sx = x0 < x1 ? 1 : -1;
-  const sy = y0 < y1 ? 1 : -1;
-  let err = dx - dy;
-  while (x !== x1 || y !== y1) {
-    if (isBlocked(g, x, y) && !(x === x0 && y === y0)) return false;
-    const e2 = 2 * err;
-    if (e2 > -dy) {
-      err -= dy;
-      x += sx;
-    }
-    if (e2 < dx) {
-      err += dx;
-      y += sy;
-    }
-  }
-  return !isBlocked(g, x1, y1);
-}
-
-function smooth(g: Grid, path: { x: number; y: number }[]) {
-  if (path.length < 3) return path;
-  const out = [path[0]];
-  let i = 0;
-  while (i < path.length - 1) {
-    let best = i + 1;
-    for (let j = path.length - 1; j > i + 1; j--) {
-      if (hasLos(g, path[i].x, path[i].y, path[j].x, path[j].y)) {
-        best = j;
-        break;
-      }
-    }
-    out.push(path[best]);
-    i = best;
-  }
-  return out;
+  return path;
 }
