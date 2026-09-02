@@ -69,16 +69,18 @@ function scatter(
   n: number,
   spread: number,
   rng: () => number,
+  keepOff: { tx: number; ty: number }[] = [],
 ) {
   let placed = 0;
   let tries = 0;
-  while (placed < n && tries < n * 18) {
+  while (placed < n && tries < n * 22) {
     tries++;
     const tx = Math.round(cx + (rng() - 0.5) * spread);
     const ty = Math.round(cy + (rng() - 0.5) * spread);
     if (tx < 2 || ty < 2 || tx >= w - 2 || ty >= h - 2) continue;
     if (tiles[ty * w + tx] === 2) continue;
     if (occupied(nodes, tx, ty, type === "tree" ? 1 : 2)) continue;
+    if (keepOff.some((s) => tx >= s.tx - 1 && tx < s.tx + 6 && ty >= s.ty - 1 && ty < s.ty + 6)) continue;
     nodes.push({ type, tx, ty });
     placed++;
   }
@@ -114,14 +116,15 @@ export function generateMap(kind: MapKind, seed: number): GenMap {
   clearAround(tiles, w, h, enemy.tx, enemy.ty, 7);
 
   const nodes: PlacedNode[] = [];
+  const keepOff = [player, enemy];
   for (const s of [player, enemy]) {
-    scatter(nodes, tiles, w, h, "berry", s.tx + 4, s.ty + 1, 6, 6, rng);
-    scatter(nodes, tiles, w, h, "gold", s.tx + 1, s.ty - 5, 3, 4, rng);
-    scatter(nodes, tiles, w, h, "stone", s.tx - 2, s.ty + 5, 3, 4, rng);
-    scatter(nodes, tiles, w, h, "tree", s.tx + 6, s.ty - 2, 14, 10, rng);
+    scatter(nodes, tiles, w, h, "berry", s.tx + 5, s.ty + 1, 6, 7, rng, keepOff);
+    scatter(nodes, tiles, w, h, "gold", s.tx + 1, s.ty - 6, 3, 5, rng, keepOff);
+    scatter(nodes, tiles, w, h, "stone", s.tx - 3, s.ty + 6, 3, 5, rng, keepOff);
+    scatter(nodes, tiles, w, h, "tree", s.tx + 8, s.ty - 2, 14, 11, rng, keepOff);
   }
-  scatter(nodes, tiles, w, h, "gold", (w / 2) | 0, (h / 2) | 0, 4, 10, rng);
-  scatter(nodes, tiles, w, h, "stone", (w / 2) | 0, ((h / 2) | 0) + 6, 3, 8, rng);
+  scatter(nodes, tiles, w, h, "gold", (w / 2) | 0, (h / 2) | 0, 4, 10, rng, keepOff);
+  scatter(nodes, tiles, w, h, "stone", (w / 2) | 0, ((h / 2) | 0) + 6, 3, 8, rng, keepOff);
 
   const forests = 5 + Math.floor(rng() * 4);
   for (let i = 0; i < forests; i++) {
@@ -129,7 +132,7 @@ export function generateMap(kind: MapKind, seed: number): GenMap {
     const fy = 6 + Math.floor(rng() * (h - 12));
     if (Math.hypot(fx - player.tx, fy - player.ty) < 10) continue;
     if (Math.hypot(fx - enemy.tx, fy - enemy.ty) < 10) continue;
-    scatter(nodes, tiles, w, h, "tree", fx, fy, 10 + Math.floor(rng() * 10), 8, rng);
+    scatter(nodes, tiles, w, h, "tree", fx, fy, 10 + Math.floor(rng() * 10), 8, rng, keepOff);
   }
 
   const animals: { tx: number; ty: number }[] = [];

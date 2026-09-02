@@ -21,7 +21,7 @@ import {
   type Cost,
   type Res,
 } from "./catalog";
-import { astar, nearestWalkable, type Grid } from "./pathfind";
+import { astar, isBlocked, nearestWalkable, standNear, type Grid } from "./pathfind";
 import { generateMap, tileCenter, type MapKind } from "./mapgen";
 import { audio } from "./audio";
 import { assetUrl } from "@/lib/asset";
@@ -397,9 +397,15 @@ export class Engine {
 
   spawnTown(team: number, tx: number, ty: number, villagers: number) {
     const b = this.spawnBld("town_center", team, tx, ty, true);
-    const c = tileCenter(tx + 2, ty + 4);
+    for (let dx = -3; dx <= -2; dx++) {
+      if (this.canPlace("house", tx + dx, ty + 1, team)) {
+        this.spawnBld("house", team, tx + dx, ty + 1, true);
+        break;
+      }
+    }
     for (let i = 0; i < villagers; i++) {
-      this.spawnUnit("villager", team, c.x - 20 + i * 18, c.y + 8);
+      const spot = this.spawnSpot(b, i);
+      this.spawnUnit("villager", team, spot.x, spot.y);
     }
     return b;
   }
@@ -407,7 +413,8 @@ export class Engine {
   assignStartJobs(team: number) {
     const vills = this.ents.filter((e) => e.kind === "unit" && e.team === team && e.type === "villager");
     vills.forEach((v, i) => {
-      const node = this.nearestNode(v, i % 3 === 0 ? "tree" : "berry");
+      const want = i === 0 ? "tree" : "berry";
+      const node = this.nearestNode(v, want) ?? this.nearestNode(v, "berry") ?? this.nearestNode(v, "tree");
       if (node) v.task = { t: "gather", nodeId: node.id, phase: "go" };
     });
   }
@@ -660,6 +667,7 @@ export class Engine {
   }
 
   stepUnit(e: Ent, dt: number) {
+    this.unstick(e);
     e.attackCd = Math.max(0, e.attackCd - dt);
     const def = UNITS[e.type];
     if (!def) return;
@@ -730,11 +738,11 @@ export class Engine {
         e.task = null;
         return;
       }
-      if (!this.inRange(e, b, 24)) this.ensureMoveTo(e, b.x, b.y, dt, def.speed);
+      if (!this.inRange(e, b, 40)) this.ensureMoveTo(e, b.x, b.y, dt, def.speed);
       else {
         e.vx = 0;
         e.vy = 0;
-        b.progress += dt / (BUILDINGS[b.type].time * 0.55);
+        b.progress += dt / (BUILDINGS[b.type].time * 0.4);
         b.hp = Math.min(b.maxHp, b.hp + (b.maxHp * dt) / (BUILDINGS[b.type].time * 0.55));
         if (b.progress >= 1) {
           b.done = true;
@@ -777,7 +785,7 @@ export class Engine {
         t.phase = "go";
         return;
       }
-      if (!this.inRange(e, drop, 24)) this.ensureMoveTo(e, drop.x, drop.y, dt, speed);
+      if (!this.inRange(e, drop, 40)) this.ensureMoveTo(e, drop.x, drop.y, dt, speed);
       else {
         this.stock[e.team as 0 | 1][res] += e.carryAmt;
         e.carryAmt = 0;
@@ -786,7 +794,7 @@ export class Engine {
       }
       return;
     }
-    if (!this.inRange(e, node, 28)) {
+    if (!this.inRange(e, node, 44)) {
       this.ensureMoveTo(e, node.x, node.y, dt, speed);
       return;
     }
@@ -833,12 +841,10 @@ export class Engine {
       q.left -= dt;
       if (q.left <= 0) {
         if (this.popUsed(e.team) < this.popCap(e.team)) {
-          const u = this.spawnUnit(q.type, e.team, e.rallyX, e.rallyY);
-          const stand = nearestWalkable(this.grid(), Math.floor(e.rallyX / TILE), Math.floor(e.rallyY / TILE));
-          if (stand) {
-            const c = tileCenter(stand.x, stand.y);
-            u.x = c.x;
-            u.y = c.y;
+          const u = this.finishTrain(e, q.type);
+          if (e.team === 0) {
+            this.pushMsg(`${UNITS[q.type]?.name ?? "Unit"} trained.`);
+            if (q.type === "villager") this.selected = [u.id];
           }
           if (e.team === 0 && UNITS[q.type]?.role !== "villager") this.trainedSoldiers++;
           audio.place();
@@ -991,23 +997,78 @@ export class Engine {
   ensureMoveTo(e: Ent, x: number, y: number, dt: number, speed: number) {
     const gx = Math.floor(x / TILE);
     const gy = Math.floor(y / TILE);
-    if (!e.nav || e.nav.gx !== gx || e.nav.gy !== gy) {
-      const path =
-        astar(this.grid(), Math.floor(e.x / TILE), Math.floor(e.y / TILE), gx, gy) ?? [];
-      e.nav = { gx, gy, path, i: 0 };
+    const fromX = Math.floor(e.x / TILE);
+    const fromY = Math.floor(e.y / TILE);
+    const stand = standNear(this.grid(), fromX, fromY, gx, gy);
+    const sgx = stand?.x ?? gx;
+    const sgy = stand?.y ?? gy;
+    if (!e.nav || e.nav.gx !== sgx || e.nav.gy !== sgy) {
+      const path = astar(this.grid(), fromX, fromY, sgx, sgy) ?? [];
+      e.nav = { gx: sgx, gy: sgy, path, i: 0 };
+    }
+    const destX = (sgx + 0.5) * TILE;
+    const destY = (sgy + 0.5) * TILE;
+    if (Math.hypot(e.x - destX, e.y - destY) < 14) {
+      e.vx = 0;
+      e.vy = 0;
+      e.nav = null;
+      return;
     }
     if (!e.nav.path.length) {
-      const d = Math.hypot(x - e.x, y - e.y) || 1;
-      e.x += ((x - e.x) / d) * speed * dt * 0.65;
-      e.y += ((y - e.y) / d) * speed * dt * 0.65;
-      this.faceToward(e, x, y);
+      const d = Math.hypot(destX - e.x, destY - e.y) || 1;
+      e.x += ((destX - e.x) / d) * speed * dt;
+      e.y += ((destY - e.y) / d) * speed * dt;
+      this.faceToward(e, destX, destY);
       e.anim += dt * 8;
+      this.unstick(e);
       return;
     }
     const mv: Extract<Task, { t: "move" }> = { t: "move", path: e.nav.path, i: e.nav.i };
     const cont = this.followPath(e, mv, dt, speed);
     e.nav.i = mv.i;
     if (!cont) e.nav = null;
+  }
+
+  spawnSpot(b: Ent, slot = 0) {
+    const g = this.grid();
+    const south = b.ty + b.th;
+    const candidates: { x: number; y: number }[] = [];
+    for (let y = south; y <= south + 2; y++) {
+      for (let x = b.tx; x < b.tx + b.tw; x++) {
+        if (!isBlocked(g, x, y)) candidates.push({ x, y });
+      }
+    }
+    if (!candidates.length) {
+      const stand = standNear(g, b.tx, south, Math.floor(b.x / TILE), Math.floor(b.y / TILE));
+      if (stand) candidates.push(stand);
+    }
+    const t = candidates[slot % Math.max(1, candidates.length)] ?? { x: b.tx, y: south };
+    const c = tileCenter(t.x, t.y);
+    const col = slot % 4;
+    return { x: c.x + (col - 1.5) * 12, y: c.y + Math.floor(slot / 4) * 12 };
+  }
+
+  finishTrain(b: Ent, type: string) {
+    const spot = this.spawnSpot(b, b.queue.length);
+    const u = this.spawnUnit(type, b.team, spot.x, spot.y);
+    const rally = nearestWalkable(this.grid(), Math.floor(b.rallyX / TILE), Math.floor(b.rallyY / TILE));
+    if (rally) {
+      const path = astar(this.grid(), Math.floor(u.x / TILE), Math.floor(u.y / TILE), rally.x, rally.y);
+      u.task = { t: "move", path: path && path.length ? path : [{ x: rally.x, y: rally.y }], i: 0 };
+    }
+    return u;
+  }
+
+  unstick(e: Ent) {
+    const g = this.grid();
+    const tx = Math.floor(e.x / TILE);
+    const ty = Math.floor(e.y / TILE);
+    if (!isBlocked(g, tx, ty)) return;
+    const n = nearestWalkable(g, tx, ty);
+    if (!n) return;
+    const c = tileCenter(n.x, n.y);
+    e.x += (c.x - e.x) * 0.45;
+    e.y += (c.y - e.y) * 0.45;
   }
 
   issueMove(ids: number[], x: number, y: number) {
@@ -1052,9 +1113,13 @@ export class Engine {
       ids.forEach((id) => {
         const e = this.byId(id);
         if (e?.type === "villager") {
+          e.nav = null;
           if (hit.kind === "animal") e.task = { t: "attack", targetId: hit.id };
           else e.task = { t: "gather", nodeId: hit.id, phase: "go" };
-        } else if (e) e.task = { t: "attack", targetId: hit.id };
+        } else if (e) {
+          e.nav = null;
+          e.task = { t: "attack", targetId: hit.id };
+        }
       });
       this.markOrder(hit.x, hit.y, verb);
       return;
@@ -1062,7 +1127,10 @@ export class Engine {
     if (hit && hit.kind === "bld" && !hit.done && hit.team === 0) {
       ids.forEach((id) => {
         const e = this.byId(id);
-        if (e?.type === "villager") e.task = { t: "build", bldId: hit.id };
+        if (e?.type === "villager") {
+          e.nav = null;
+          e.task = { t: "build", bldId: hit.id };
+        }
       });
       this.markOrder(hit.x, hit.y, `Building ${BUILDINGS[hit.type]?.name ?? "it"}.`);
       return;
@@ -1140,6 +1208,7 @@ export class Engine {
         }
         if (best) {
           mark = best;
+          v.nav = null;
           v.task = best.kind === "animal" ? { t: "attack", targetId: best.id } : { t: "gather", nodeId: best.id, phase: "go" };
         }
         continue;
@@ -1147,6 +1216,7 @@ export class Engine {
       const node = this.nearestNode(v, type);
       if (node) {
         mark = node;
+        v.nav = null;
         v.task = { t: "gather", nodeId: node.id, phase: "go" };
       }
     }
@@ -1234,21 +1304,23 @@ export class Engine {
   }
 
   distToEnt(a: Ent, b: Ent): number {
-    if (b.kind === "bld") {
+    if (b.kind === "bld" || b.kind === "node") {
+      const tw = b.kind === "bld" ? b.tw : 1;
+      const th = b.kind === "bld" ? b.th : 1;
       const x0 = b.tx * TILE;
       const y0 = b.ty * TILE;
-      const x1 = (b.tx + b.tw) * TILE;
-      const y1 = (b.ty + b.th) * TILE;
+      const x1 = (b.tx + tw) * TILE;
+      const y1 = (b.ty + th) * TILE;
       const cx = Math.max(x0, Math.min(x1, a.x));
       const cy = Math.max(y0, Math.min(y1, a.y));
       return Math.hypot(a.x - cx, a.y - cy);
     }
-    if (a.kind === "bld") return this.distToEnt(b, a);
+    if (a.kind === "bld" || a.kind === "node") return this.distToEnt(b, a);
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
   inRange(a: Ent, b: Ent, range: number) {
-    const slack = a.kind === "bld" || b.kind === "bld" ? 22 : 6;
+    const slack = a.kind === "bld" || b.kind === "bld" || b.kind === "node" || a.kind === "node" ? 28 : 10;
     return this.distToEnt(a, b) <= range + slack;
   }
 
@@ -1289,14 +1361,22 @@ export class Engine {
       return;
     }
     pay(this.stock[0], cost);
-    const b = this.spawnBld(type, 0, tx, ty, false);
+    const bld = this.spawnBld(type, 0, tx, ty, false);
     const vills = this.selected.map((id) => this.byId(id)).filter((e) => e?.type === "villager" && e.team === 0);
-    const workers = vills.length ? vills : [this.ents.find((e) => e.type === "villager" && e.team === 0 && !e.task)];
+    let workers = vills.filter((v): v is Ent => !!v);
+    if (!workers.length) {
+      workers = this.ents
+        .filter((e) => e.type === "villager" && e.team === 0)
+        .sort((a, c) => Math.hypot(a.x - bld.x, a.y - bld.y) - Math.hypot(c.x - bld.x, c.y - bld.y))
+        .slice(0, 2);
+    }
     workers.forEach((v) => {
-      if (v) v.task = { t: "build", bldId: b.id };
+      v.task = { t: "build", bldId: bld.id };
+      v.nav = null;
     });
     audio.place();
     if (type !== "wall") this.placing = null;
+    this.pushMsg(`Founding ${BUILDINGS[type].name}.`);
   }
 
   paintLos(buf: Uint8Array, x: number, y: number, r: number) {
@@ -1514,27 +1594,70 @@ export class Engine {
   }
 
   hitEnt(wx: number, wy: number, visCheck: boolean, pad = 0) {
-    let best: Ent | null = null;
-    let bd = 28 + pad;
+    let unit: Ent | null = null;
+    let unitD = 36 + pad;
+    let node: Ent | null = null;
+    let nodeD = 56 + pad;
+    let bld: Ent | null = null;
+    let bldD = 1e9;
     for (const e of this.ents) {
-      if (e.kind === "proj") continue;
+      if (e.kind === "proj" || e.hp <= 0) continue;
       if (visCheck && e.team !== 0 && !this.seenByPlayer(e)) continue;
       if (e.kind === "bld") {
-        const extra = 8 + pad;
+        const extra = 4 + pad * 0.25;
         const x0 = e.tx * TILE - extra;
         const y0 = e.ty * TILE - extra;
         const x1 = (e.tx + e.tw) * TILE + extra;
         const y1 = (e.ty + e.th) * TILE + extra;
         if (wx >= x0 && wx <= x1 && wy >= y0 && wy <= y1) {
-          return e;
+          const cx = (x0 + x1) / 2;
+          const cy = (y0 + y1) / 2;
+          const d = Math.hypot(wx - cx, wy - cy);
+          if (d < bldD) {
+            bldD = d;
+            bld = e;
+          }
         }
         continue;
       }
-      const hotY = e.kind === "node" && e.type === "tree" ? e.y - 24 : e.y;
-      const r =
-        e.kind === "node" ? (e.type === "tree" ? 38 : 32) + pad : 20 + pad;
+      const hotY = e.kind === "node" && e.type === "tree" ? e.y - 18 : e.y;
+      const r = e.kind === "node" ? (e.type === "tree" ? 46 : 40) + pad : e.kind === "animal" ? 28 + pad : 22 + pad;
       const d = Math.hypot(e.x - wx, hotY - wy);
-      if (d < r && d < bd + 8) {
+      if (d > r) continue;
+      if (e.kind === "unit" && e.team === 0 && d < unitD) {
+        unitD = d;
+        unit = e;
+      } else if ((e.kind === "node" && e.amount > 0) || e.kind === "animal") {
+        if (d < nodeD) {
+          nodeD = d;
+          node = e;
+        }
+      } else if (e.kind === "unit" && e.team === 1 && d < unitD + 8) {
+        unitD = d;
+        unit = e;
+      }
+    }
+    const villsOn = this.selected.some((id) => this.byId(id)?.type === "villager");
+    if (villsOn && node) return node;
+    if (unit) return unit;
+    if (node) return node;
+    return bld;
+  }
+
+  nearestOrderAt(wx: number, wy: number, rad: number) {
+    let best: Ent | null = null;
+    let bd = rad;
+    const villsOn = this.selected.some((id) => this.byId(id)?.type === "villager");
+    for (const e of this.ents) {
+      if (e.hp <= 0) continue;
+      const hotY = e.kind === "node" && e.type === "tree" ? e.y - 18 : e.y;
+      const d = Math.hypot(e.x - wx, hotY - wy);
+      if (d >= bd) continue;
+      const isNode = (e.kind === "node" && e.amount > 0) || e.kind === "animal";
+      const isSite = e.kind === "bld" && !e.done && e.team === 0;
+      const isEnemy = e.team === 1 && (e.kind === "unit" || e.kind === "bld");
+      const isFarm = e.kind === "bld" && e.type === "farm" && e.done;
+      if (isNode || isSite || isEnemy || (villsOn && isFarm)) {
         bd = d;
         best = e;
       }
@@ -1651,7 +1774,13 @@ export class Engine {
       return;
     }
     if (touch && moved > 16) return;
-    const hit = this.hitEnt(w.x, w.y, true, touch ? 18 : 0);
+    let hit = this.hitEnt(w.x, w.y, true, touch ? 22 : 0);
+    const villsOn = this.selected.some((id) => this.byId(id)?.type === "villager");
+    const unitsOn = this.selected.some((id) => this.byId(id)?.kind === "unit" && this.byId(id)?.team === 0);
+    if (unitsOn) {
+      const order = this.nearestOrderAt(w.x, w.y, touch ? 90 : 48);
+      if (order && (villsOn || order.team === 1 || (order.kind === "bld" && !order.done))) hit = order;
+    }
     const now = performance.now();
     const dbl = !!(hit && hit.id === this.lastClick.id && now - this.lastClick.t < 360);
     this.lastClick = { id: hit?.id ?? 0, t: now };
@@ -1816,8 +1945,14 @@ export class Engine {
   queueTrain(type: string) {
     const def = UNITS[type];
     if (!def) return;
-    const b = this.selected.map((id) => this.byId(id)).find((e) => e?.kind === "bld" && e.team === 0 && e.done && e.type === def.building);
-    if (!b) return;
+    let b = this.selected.map((id) => this.byId(id)).find((e) => e?.kind === "bld" && e.team === 0 && e.done && e.type === def.building);
+    if (!b) {
+      b = this.ents.find((e) => e.kind === "bld" && e.team === 0 && e.done && e.type === def.building && e.hp > 0);
+    }
+    if (!b) {
+      this.pushMsg(`Need a ${BUILDINGS[def.building]?.name ?? "building"} first.`);
+      return;
+    }
     if (this.age[0] < def.age) {
       this.pushMsg("Advance in age first.");
       return;
@@ -1833,7 +1968,9 @@ export class Engine {
       return;
     }
     pay(this.stock[0], cost);
-    b.queue.push({ type, left: def.time, cost });
+    b.queue.push({ type, left: Math.max(6, def.time * 0.7), cost });
+    this.selected = [b.id];
+    this.pushMsg(`Training ${def.name}…`);
   }
 
   startAge() {
@@ -1918,7 +2055,7 @@ export class Engine {
     const blds = sel.filter((s) => s.kind === "bld" && s.team === 0);
     const vills = units.filter((s) => s.type === "villager");
     if (this.placing) acts.push({ id: "cancel", label: "Cancel place" });
-    if (vills.length) {
+    if (vills.length || blds.some((s) => s.type === "town_center")) {
       acts.push(
         { id: "gather:berry", label: "Forage" },
         { id: "gather:tree", label: "Chop wood" },

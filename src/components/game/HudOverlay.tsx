@@ -152,7 +152,11 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
                 key={a.id + a.label}
                 type="button"
                 disabled={a.disabled}
-                onClick={() => onAction(a.id)}
+                onPointerUp={(ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  if (!a.disabled) onAction(a.id);
+                }}
                 className="flex min-h-12 shrink-0 items-center gap-1.5 rounded-sm border border-bronze/30 bg-wood-mid px-3 py-2 text-left text-xs leading-tight text-parchment enabled:hover:border-bronze disabled:opacity-40"
               >
                 {a.sprite && (

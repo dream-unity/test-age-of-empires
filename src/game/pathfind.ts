@@ -26,7 +26,7 @@ export function nearestWalkable(g: Grid, x: number, y: number): { x: number; y: 
   x = Math.max(0, Math.min(g.w - 1, x | 0));
   y = Math.max(0, Math.min(g.h - 1, y | 0));
   if (!isBlocked(g, x, y)) return { x, y };
-  for (let r = 1; r <= 8; r++) {
+  for (let r = 1; r <= 16; r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
@@ -37,6 +37,42 @@ export function nearestWalkable(g: Grid, x: number, y: number): { x: number; y: 
     }
   }
   return null;
+}
+
+/** Walkable tile next to a blocked goal, preferring the side facing the unit. */
+export function standNear(
+  g: Grid,
+  fromX: number,
+  fromY: number,
+  gx: number,
+  gy: number,
+): { x: number; y: number } | null {
+  fromX |= 0;
+  fromY |= 0;
+  gx |= 0;
+  gy |= 0;
+  if (!isBlocked(g, gx, gy) && inb(g, gx, gy)) return { x: gx, y: gy };
+  let best: { x: number; y: number } | null = null;
+  let bestD = 1e9;
+  for (let r = 1; r <= 14; r++) {
+    let found = false;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const nx = gx + dx;
+        const ny = gy + dy;
+        if (isBlocked(g, nx, ny)) continue;
+        found = true;
+        const d = (nx - fromX) * (nx - fromX) + (ny - fromY) * (ny - fromY);
+        if (d < bestD) {
+          bestD = d;
+          best = { x: nx, y: ny };
+        }
+      }
+    }
+    if (found && best) return best;
+  }
+  return nearestWalkable(g, fromX, fromY);
 }
 
 export function astar(
@@ -52,7 +88,7 @@ export function astar(
   gy = gy | 0;
   if (!inb(g, sx, sy) || !inb(g, gx, gy)) return null;
   const start = nearestWalkable(g, sx, sy);
-  const goal = nearestWalkable(g, gx, gy);
+  const goal = standNear(g, sx, sy, gx, gy);
   if (!start || !goal) return null;
   sx = start.x;
   sy = start.y;
