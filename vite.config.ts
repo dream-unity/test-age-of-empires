@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
@@ -17,6 +17,12 @@ function spaFallback(): Plugin {
         copyFileSync(index, resolve(rootDir, "dist/404.html"));
         writeFileSync(resolve(rootDir, "dist/.nojekyll"), "");
       }
+      const www = resolve(rootDir, "www");
+      mkdirSync(www, { recursive: true });
+      const js = resolve(rootDir, "dist/www/game.js");
+      const css = resolve(rootDir, "dist/www/game.css");
+      if (existsSync(js)) copyFileSync(js, resolve(www, "game.js"));
+      if (existsSync(css)) copyFileSync(css, resolve(www, "game.css"));
     },
   };
 }
@@ -35,6 +41,19 @@ export default defineConfig({
   },
   resolve: {
     alias: { "@": resolve(rootDir, "src") },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        entryFileNames: "www/game.js",
+        chunkFileNames: "www/[name].js",
+        assetFileNames: (info) => {
+          const name = info.names?.[0] ?? info.name ?? "";
+          if (name.endsWith(".css")) return "www/game.css";
+          return "www/[name][extname]";
+        },
+      },
+    },
   },
   plugins: [tailwindcss(), react(), spaFallback()],
 });
