@@ -69,6 +69,7 @@ test("a trained villager appears safely outside the Town Center and stays visibl
   assert.equal(trained.type, "villager");
   assert.equal(trained.task, null, "no implicit route should carry the villager away");
   assertOutsideBuilding(trained, townCenter);
+  assertNearBuilding(engine, trained, townCenter);
   assertActorSafe(engine, trained);
 });
 
@@ -120,6 +121,7 @@ test("trained soldiers have safe spawns and every route is clamped to the map", 
   assert.equal(soldier.type, "clubman");
   assert.equal(soldier.task, null, "a default off-screen rally route must not be assigned");
   assertOutsideBuilding(soldier, barracks);
+  assertNearBuilding(engine, soldier, barracks);
   assertActorSafe(engine, soldier);
 
   engine.issueMove([soldier.id], 1_000_000, -1_000_000);
@@ -145,7 +147,9 @@ test("units recover from blocked tiles and re-route instead of oscillating", () 
   const engine = makeEngine();
   const unit = playerUnits(engine)[0];
   const townCenter = playerBuilding(engine, "town_center");
-  engine.ents = engine.ents.filter((ent) => ent.kind !== "unit" || ent.team !== 0 || ent.id === unit.id);
+  engine.ents = engine.ents.filter(
+    (ent) => ent.kind !== "unit" || ent.team !== 0 || ent.id === unit.id,
+  );
 
   unit.x = townCenter.x;
   unit.y = townCenter.y;
@@ -338,6 +342,13 @@ function assertOutsideBuilding(unit, building) {
     ty >= building.ty &&
     ty < building.ty + building.th;
   assert.equal(inside, false, "unit must spawn outside the building footprint");
+}
+
+function assertNearBuilding(engine, unit, building) {
+  assert.ok(
+    engine.distToEnt(unit, building) <= 30,
+    "unit should use the nearest open perimeter tile",
+  );
 }
 
 function assertActorSafe(engine, actor) {

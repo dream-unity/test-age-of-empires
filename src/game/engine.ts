@@ -1269,7 +1269,9 @@ export class Engine {
         (e) => e.kind === "unit" && Math.hypot(e.x - c.x, e.y - c.y) < UNIT_SPACING,
       );
     });
-    const pool = free.length ? free : candidates;
+    const available = free.length ? free : candidates;
+    const nearestRing = available.reduce((ring, tile) => Math.min(ring, tile.ring), Infinity);
+    const pool = available.filter((tile) => tile.ring === nearestRing);
     const tile =
       pool[slot % Math.max(1, pool.length)] ??
       nearestWalkable(g, Math.floor(b.x / TILE), Math.floor(b.y / TILE));
