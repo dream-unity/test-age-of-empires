@@ -1,19 +1,34 @@
 import { useEffect, useRef, useState } from "react";
-import { CIVS, MISSIONS, type CivId } from "@/game/catalog";
+import { CIVS, type CivId } from "@/game/catalog";
 import { Engine, loadAssets, type Assets, type GameConfig, type HudSnapshot } from "@/game/engine";
 import { audio } from "@/game/audio";
 import { TitleScreen } from "./TitleScreen";
 import { HudOverlay } from "./HudOverlay";
 
-type Screen = "title" | "brief" | "play" | "how" | "settings";
+type Screen = "title" | "play" | "how" | "settings";
 
 const SAVE = "dawn-empires-v1";
 
 function loadSave() {
   try {
     const raw = localStorage.getItem(SAVE);
-    if (!raw) return { version: 1, campaign: 0, civ: "aegean" as CivId, music: 0.22, sfx: 0.55, muted: false };
-    const d = JSON.parse(raw) as { version?: number; campaign?: number; civ?: CivId; music?: number; sfx?: number; muted?: boolean };
+    if (!raw)
+      return {
+        version: 1,
+        campaign: 0,
+        civ: "aegean" as CivId,
+        music: 0.22,
+        sfx: 0.55,
+        muted: false,
+      };
+    const d = JSON.parse(raw) as {
+      version?: number;
+      campaign?: number;
+      civ?: CivId;
+      music?: number;
+      sfx?: number;
+      muted?: boolean;
+    };
     return {
       version: 1,
       campaign: d.campaign ?? 0,
@@ -23,7 +38,14 @@ function loadSave() {
       muted: d.muted ?? false,
     };
   } catch {
-    return { version: 1, campaign: 0, civ: "aegean" as CivId, music: 0.22, sfx: 0.55, muted: false };
+    return {
+      version: 1,
+      campaign: 0,
+      civ: "aegean" as CivId,
+      music: 0.22,
+      sfx: 0.55,
+      muted: false,
+    };
   }
 }
 
@@ -39,7 +61,6 @@ export function DawnApp() {
   });
   const [civ, setCiv] = useState<CivId>("aegean");
   const [difficulty, setDifficulty] = useState<0 | 1 | 2>(1);
-  const [mission, setMission] = useState(1);
   const [assets, setAssets] = useState<Assets | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [hud, setHud] = useState<HudSnapshot | null>(null);
@@ -82,13 +103,13 @@ export function DawnApp() {
 
   const enemyCiv = (CIVS.find((c) => c.id !== civ) ?? CIVS[0]).id;
 
-  const begin = (mode: "campaign" | "skirmish", m: number) => {
+  const begin = () => {
     if (!assets) return;
     audio.unlock();
     persist({ civ });
     setCfg({
-      mode,
-      mission: m,
+      mode: "skirmish",
+      mission: 0,
       civ,
       enemyCiv,
       difficulty,
@@ -105,54 +126,18 @@ export function DawnApp() {
           setCiv={setCiv}
           difficulty={difficulty}
           setDifficulty={setDifficulty}
-          campaignDone={save.campaign}
-          onCampaign={(m) => {
-            audio.unlock();
-            audio.click();
-            setMission(m);
-            setScreen("brief");
-          }}
-          onSkirmish={() => begin("skirmish", 0)}
+          onPlay={begin}
           onHow={() => setScreen("how")}
           onSettings={() => setScreen("settings")}
           ready={!!assets}
         />
         {!assets && !loadErr && (
-          <p className="pointer-events-none absolute bottom-4 left-5 text-xs text-parchment-dim">Loading the field…</p>
+          <p className="pointer-events-none absolute bottom-4 left-5 text-xs text-parchment-dim">
+            Loading the field…
+          </p>
         )}
         {loadErr && <p className="absolute bottom-4 left-5 text-xs text-blood">{loadErr}</p>}
       </>
-    );
-  }
-
-  if (screen === "brief") {
-    const m = MISSIONS[mission - 1] ?? MISSIONS[0];
-    return (
-      <div className="flex h-dvh flex-col bg-ink px-6 py-10 text-parchment">
-        <p className="font-display text-xs tracking-[0.28em] text-bronze uppercase">Campaign</p>
-        <h1 className="mt-2 font-display text-3xl">{m.title}</h1>
-        <p className="mt-4 max-w-lg text-sm leading-relaxed text-parchment-dim">{m.blurb}</p>
-        <ul className="mt-6 max-w-md space-y-2 text-sm">
-          {m.objectives.map((o) => (
-            <li key={o} className="border-l-2 border-bronze/40 pl-3">
-              {o}
-            </li>
-          ))}
-        </ul>
-        <div className="mt-8 flex gap-3">
-          <button
-            type="button"
-            disabled={!assets}
-            onClick={() => begin("campaign", mission)}
-            className="rounded-md bg-parchment px-5 py-2.5 font-display text-ink disabled:opacity-40"
-          >
-            Take the field
-          </button>
-          <button type="button" onClick={() => setScreen("title")} className="rounded-md border border-bronze/40 px-5 py-2.5 font-display">
-            Back
-          </button>
-        </div>
-      </div>
     );
   }
 
@@ -161,15 +146,38 @@ export function DawnApp() {
       <div className="flex h-dvh flex-col overflow-auto bg-ink px-6 py-10 text-parchment">
         <h1 className="font-display text-3xl">How to Play</h1>
         <div className="mt-6 max-w-xl space-y-4 text-sm leading-relaxed text-parchment-dim">
-          <p>On a computer: left-click selects. Drag a box to select many. Right-click — or tap a resource — issues a command.</p>
-          <p>On a tablet or phone: tap a villager to select, then tap a tree, berry bush, gold pile, or stone to gather. Tap the ground to move. Drag with one finger to pan, pinch to zoom. Double-tap a villager to select all of that type.</p>
-          <p>You can also use the buttons along the bottom: Forage, Chop wood, Mine gold, Mine stone, Hunt. No right-click is needed.</p>
-          <p>Villagers collect food, wood, gold and stone, then return to a Town Center, Granary (food) or Storage Pit.</p>
-          <p>Houses raise population. Barracks, Archery Ranges and Stables train soldiers. Advance ages at the Town Center.</p>
-          <p>WASD or arrows pan. Mouse-wheel zooms. C centers on the selection. Period finds an idle villager. Esc cancels placement.</p>
+          <p>
+            On a computer: left-click selects. Drag a box to select many. Right-click — or tap a
+            resource — issues a command.
+          </p>
+          <p>
+            On a tablet or phone: tap a villager to select, then tap a tree, berry bush, gold pile,
+            or stone to gather. Tap the ground to move. Drag with one finger to pan, pinch to zoom.
+            Double-tap a villager to select all of that type.
+          </p>
+          <p>
+            You can also use the buttons along the bottom: Forage, Chop wood, Mine gold, Mine stone,
+            Hunt. No right-click is needed.
+          </p>
+          <p>
+            Villagers collect food, wood, gold and stone, then return to a Town Center, Granary
+            (food) or Storage Pit.
+          </p>
+          <p>
+            Houses raise population. Barracks, Archery Ranges and Stables train soldiers. Advance
+            ages at the Town Center.
+          </p>
+          <p>
+            WASD or arrows pan. Mouse-wheel zooms. C centers on the selection. Period finds an idle
+            villager. Esc cancels placement.
+          </p>
           <p>Destroy the enemy Town Center to win. Guard your own.</p>
         </div>
-        <button type="button" onClick={() => setScreen("title")} className="mt-8 w-fit rounded-md border border-bronze/40 px-5 py-2.5 font-display">
+        <button
+          type="button"
+          onClick={() => setScreen("title")}
+          className="mt-8 w-fit rounded-md border border-bronze/40 px-5 py-2.5 font-display"
+        >
           Back
         </button>
       </div>
@@ -220,7 +228,11 @@ export function DawnApp() {
         >
           {save.muted ? "Unmute" : "Mute"}
         </button>
-        <button type="button" onClick={() => setScreen("title")} className="mt-8 w-fit rounded-md border border-bronze/40 px-5 py-2.5 font-display">
+        <button
+          type="button"
+          onClick={() => setScreen("title")}
+          className="mt-8 w-fit rounded-md border border-bronze/40 px-5 py-2.5 font-display"
+        >
           Back
         </button>
       </div>

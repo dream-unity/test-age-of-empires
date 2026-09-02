@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { CIVS, MISSIONS, type CivId } from "@/game/catalog";
+import { CIVS, type CivId } from "@/game/catalog";
 import { assetUrl } from "@/lib/asset";
 
 type Props = {
@@ -7,9 +7,7 @@ type Props = {
   setCiv: (c: CivId) => void;
   difficulty: 0 | 1 | 2;
   setDifficulty: (d: 0 | 1 | 2) => void;
-  campaignDone: number;
-  onCampaign: (mission: number) => void;
-  onSkirmish: () => void;
+  onPlay: () => void;
   onHow: () => void;
   onSettings: () => void;
   ready?: boolean;
@@ -20,15 +18,12 @@ export function TitleScreen({
   setCiv,
   difficulty,
   setDifficulty,
-  campaignDone,
-  onCampaign,
-  onSkirmish,
+  onPlay,
   onHow,
   onSettings,
   ready = true,
 }: Props) {
   const selected = CIVS.find((c) => c.id === civ) ?? CIVS[0];
-  const nextMission = Math.min(3, campaignDone + 1);
 
   return (
     <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-ink text-parchment">
@@ -40,7 +35,7 @@ export function TitleScreen({
       <div className="absolute inset-0 bg-gradient-to-r from-ink/92 via-ink/70 to-ink/25" />
       <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/50" />
 
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col justify-between gap-6 px-5 py-8 sm:px-10 sm:py-10">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 py-8 sm:px-10 sm:py-10">
         <header className="max-w-xl pt-[max(0.5rem,env(safe-area-inset-top))]">
           <p className="font-display text-[0.7rem] tracking-[0.35em] text-bronze-dim uppercase">
             A chronicle of antiquity
@@ -49,32 +44,33 @@ export function TitleScreen({
             Dawn of Empires
           </h1>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-parchment-dim sm:text-base">
-            Gather the four resources, raise a town from mud and timber, advance through the ages, and break the rival
-            hearth. A living homage to classic 1997 real-time strategy.
+            Gather the four resources, raise a town from mud and timber, advance through the ages,
+            and break the rival hearth. A living homage to classic 1997 real-time strategy.
           </p>
         </header>
 
+        <div className="flex min-h-28 flex-1 items-center justify-center py-2">
+          <button
+            type="button"
+            onClick={onPlay}
+            disabled={!ready}
+            className="min-h-16 min-w-56 rounded-md border border-bronze bg-wood/90 px-12 py-4 text-center font-display text-2xl tracking-[0.18em] text-parchment shadow-[0_0_32px_rgba(174,125,57,0.18)] backdrop-blur-sm transition-all duration-200 hover:bg-wood-light hover:shadow-[0_0_40px_rgba(174,125,57,0.3)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bronze disabled:cursor-wait disabled:opacity-40"
+          >
+            Play
+          </button>
+        </div>
+
         <div className="grid max-w-5xl gap-6 lg:grid-cols-[minmax(0,280px)_minmax(0,1fr)]">
           <nav className="flex flex-col gap-2">
-            <MenuBtn onClick={() => onCampaign(nextMission)} disabled={!ready}>
-              Campaign
-              <span className="block text-[0.7rem] font-normal tracking-normal text-parchment-dim">
-                {MISSIONS[nextMission - 1]?.title}
-              </span>
-            </MenuBtn>
-            <MenuBtn onClick={onSkirmish} disabled={!ready}>
-              Random Map
-            </MenuBtn>
             <MenuBtn onClick={onHow}>How to Play</MenuBtn>
             <MenuBtn onClick={onSettings}>Settings</MenuBtn>
             {!ready && <p className="px-1 pt-1 text-xs text-bronze">Illuminating the map…</p>}
-            {campaignDone > 0 && (
-              <p className="px-1 pt-1 text-xs text-bronze">Campaign progress: mission {campaignDone} complete</p>
-            )}
           </nav>
 
           <section className="rounded-lg border border-bronze/25 bg-wood/80 p-4 backdrop-blur-sm sm:p-5">
-            <p className="font-display text-xs tracking-[0.22em] text-bronze uppercase">Civilization</p>
+            <p className="font-display text-xs tracking-[0.22em] text-bronze uppercase">
+              Civilization
+            </p>
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {CIVS.map((c) => (
                 <button
@@ -96,7 +92,9 @@ export function TitleScreen({
             <p className="mt-2 text-sm leading-relaxed">{selected.bonus}</p>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className="text-xs tracking-wide text-parchment-dim uppercase">Rival mettle</span>
+              <span className="text-xs tracking-wide text-parchment-dim uppercase">
+                Rival mettle
+              </span>
               {(["Raider", "Warlord", "Emperor"] as const).map((label, i) => (
                 <button
                   key={label}
