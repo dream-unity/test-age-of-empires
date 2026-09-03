@@ -2156,7 +2156,7 @@ export class Engine {
         !this.touchBoxSelecting &&
         !this.pointerDragged &&
         total >= TOUCH_DRAG_THRESHOLD &&
-        this.holdAt > 0 &&
+        this.holdAt !== 0 &&
         performance.now() - this.holdAt >= TOUCH_SELECT_HOLD_MS
       ) {
         this.touchBoxSelecting = true;

@@ -113,7 +113,7 @@ test("touch supports hold-drag subset selection while preserving pan and double-
   Object.assign(villagers[2], { x: 360, y: 320 });
 
   engine.onDown(touchPointer("pointerdown", 11, 80, 80));
-  engine.holdAt = performance.now() - 500;
+  engine.holdAt = -500;
   engine.onMove(touchPointer("pointermove", 11, 240, 240));
   assert.equal(engine.touchBoxSelecting, true, "a held drag should enter marquee mode");
   assert.equal(engine.cam.x, 0, "marquee selection must not pan the map");
