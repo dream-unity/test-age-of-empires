@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
@@ -17,6 +17,15 @@ function spaFallback(): Plugin {
         copyFileSync(index, resolve(rootDir, "dist/404.html"));
         writeFileSync(resolve(rootDir, "dist/.nojekyll"), "");
       }
+      const builtAssets = resolve(rootDir, "dist/www");
+      if (!existsSync(builtAssets)) return;
+      const files = readdirSync(builtAssets);
+      const js = files.find((file) => /^game-.*\.js$/.test(file));
+      const css = files.find((file) => /^game-.*\.css$/.test(file));
+      const compatibilityAssets = resolve(rootDir, "www");
+      mkdirSync(compatibilityAssets, { recursive: true });
+      if (js) copyFileSync(resolve(builtAssets, js), resolve(compatibilityAssets, "game.js"));
+      if (css) copyFileSync(resolve(builtAssets, css), resolve(compatibilityAssets, "game.css"));
     },
   };
 }

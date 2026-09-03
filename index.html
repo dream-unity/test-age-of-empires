@@ -14,5 +14,31 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      (function () {
+        var host = location.hostname;
+        var dev =
+          location.port === "8080" ||
+          host === "localhost" ||
+          host === "127.0.0.1" ||
+          host === "0.0.0.0";
+        var entry = document.querySelector('script[type="module"][src]');
+        var built = entry && entry.getAttribute("src").indexOf("/src/main.tsx") === -1;
+        if (dev || built) return;
+
+        var root =
+          location.pathname.indexOf("/test-age-of-empires") === 0 ? "/test-age-of-empires/" : "./";
+        var version = "20260903-touch-farms";
+        var css = document.createElement("link");
+        css.rel = "stylesheet";
+        css.href = root + "www/game.css?v=" + version;
+        document.head.appendChild(css);
+        var play = document.createElement("script");
+        play.type = "module";
+        play.crossOrigin = "anonymous";
+        play.src = root + "www/game.js?v=" + version;
+        document.body.appendChild(play);
+      })();
+    </script>
   </body>
 </html>

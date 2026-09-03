@@ -49,9 +49,13 @@ test("Play starts immediately with fallback art and asset loading cannot hang fo
   assert.match(engineSource, /controller\.abort\(\)/);
 });
 
-test("production loads one cache-busted application bundle", () => {
+test("built and raw Pages deployments each load one cache-busted application bundle", () => {
   assert.equal(indexSource.match(/src="\/src\/main\.tsx"/g)?.length, 1);
-  assert.doesNotMatch(indexSource, /createElement\("script"\)|www\/game\.js/);
+  assert.match(indexSource, /var built = entry .*\/src\/main\.tsx.* === -1/s);
+  assert.match(indexSource, /if \(dev \|\| built\) return/);
+  assert.match(indexSource, /www\/game\.js\?v=" \+ version/);
+  assert.match(indexSource, /version = "20260903-touch-farms"/);
   assert.match(viteSource, /entryFileNames: "www\/game-\[hash\]\.js"/);
   assert.match(viteSource, /game-\[hash\]\[extname\]/);
+  assert.match(viteSource, /resolve\(compatibilityAssets, "game\.js"\)/);
 });
