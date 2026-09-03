@@ -1,0 +1,70 @@
+{
+  "sheets": {
+    "villager": {
+      "src": "/game/sprites/villager.png",
+      "rows": 4,
+      "cols": 4
+    },
+    "clubman": {
+      "src": "/game/sprites/clubman.png",
+      "rows": 4,
+      "cols": 4
+    },
+    "bowman": {
+      "src": "/game/sprites/bowman.png",
+      "rows": 4,
+      "cols": 4
+    },
+    "scout": {
+      "src": "/game/sprites/scout.png",
+      "rows": 4,
+      "cols": 4
+    },
+    "swordsman": {
+      "src": "/game/sprites/swordsman.png",
+      "rows": 4,
+      "cols": 4
+    },
+    "cavalry": {
+      "src": "/game/sprites/cavalry.png",
+      "rows": 4,
+      "cols": 4
+    },
+    "priest": {
+      "src": "/game/sprites/priest.png",
+      "rows": 2,
+      "cols": 2
+    }
+  },
+  "singles": {
+    "tree": "/game/sprites/tree.png",
+    "berry": "/game/sprites/berry.png",
+    "gold": "/game/sprites/gold.png",
+    "stone": "/game/sprites/stone.png",
+    "gazelle": "/game/sprites/gazelle.png",
+    "farm": "/game/sprites/farm.png",
+    "town_center": "/game/sprites/town_center.png",
+    "house": "/game/sprites/house.png",
+    "barracks": "/game/sprites/barracks.png",
+    "granary": "/game/sprites/granary.png",
+    "storage_pit": "/game/sprites/storage_pit.png",
+    "archery": "/game/sprites/archery.png",
+    "stable": "/game/sprites/stable.png",
+    "tower": "/game/sprites/tower.png",
+    "temple": "/game/sprites/temple.png",
+    "market": "/game/sprites/market.png",
+    "wall": "/game/sprites/wall.png",
+    "catapult": "/game/sprites/catapult.png"
+  },
+  "tiles": {
+    "grass": "/game/tiles/grass.png",
+    "dirt": "/game/tiles/dirt.png",
+    "water": "/game/tiles/water.png"
+  },
+  "ui": {
+    "food": "/game/ui/food.png",
+    "wood": "/game/ui/wood.png",
+    "gold": "/game/ui/gold.png",
+    "stone": "/game/ui/stone.png"
+  }
+}

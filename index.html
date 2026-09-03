@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a1208" />
+    <meta
+      name="description"
+      content="Dawn of Empires — a browser real-time strategy homage. Gather, build, age up, and conquer."
+    />
+    <title>Dawn of Empires</title>
+    <link rel="icon" type="image/svg+xml" href="/test-age-of-empires/www/favicon-C53i_tBA.svg" />
+    <script type="module" crossorigin src="/test-age-of-empires/www/game-DNk49_L4.js"></script>
+    <link rel="stylesheet" crossorigin href="/test-age-of-empires/www/game-DFWo13jd.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      (function () {
+        var host = location.hostname;
+        var dev =
+          location.port === "8080" ||
+          host === "localhost" ||
+          host === "127.0.0.1" ||
+          host === "0.0.0.0";
+        var entry = document.querySelector('script[type="module"][src]');
+        var built = entry && entry.getAttribute("src").indexOf("/src/main.tsx") === -1;
+        if (dev || built) return;
+
+        var root =
+          location.pathname.indexOf("/test-age-of-empires") === 0 ? "/test-age-of-empires/" : "./";
+        var version = "20260903-touch-farms";
+        var css = document.createElement("link");
+        css.rel = "stylesheet";
+        css.href = root + "www/game.css?v=" + version;
+        document.head.appendChild(css);
+        var play = document.createElement("script");
+        play.type = "module";
+        play.crossOrigin = "anonymous";
+        play.src = root + "www/game.js?v=" + version;
+        document.body.appendChild(play);
+      })();
+    </script>
+  </body>
+</html>
