@@ -147,22 +147,39 @@ const HUNTER_RANGE = 150;
 const HUNTER_DAMAGE = 6;
 const HUNTER_COOLDOWN = 1.2;
 const TREE_FALL_SECONDS = 0.8;
+const TOUCH_SELECT_HOLD_MS = 380;
+const TOUCH_DRAG_THRESHOLD = 8;
+const ASSET_LOAD_TIMEOUT_MS = 8_000;
 
 function loadImg(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
+    let settled = false;
+    const finish = (result: HTMLImageElement | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      img.onload = null;
+      img.onerror = null;
+      resolve(result);
+    };
+    const timeout = setTimeout(() => finish(null), ASSET_LOAD_TIMEOUT_MS);
+    img.onload = () => finish(img);
+    img.onerror = () => finish(null);
     img.src = src;
   });
 }
 
 export async function loadAssets(): Promise<Assets> {
-  const man = (await fetch(assetUrl("game/manifest.json")).then((r) => {
-    if (!r.ok) throw new Error(`Could not load game manifest (${r.status})`);
-    return r.json();
-  })) as {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ASSET_LOAD_TIMEOUT_MS);
+  const man = (await fetch(assetUrl("game/manifest.json"), { signal: controller.signal })
+    .then((r) => {
+      if (!r.ok) throw new Error(`Could not load game manifest (${r.status})`);
+      return r.json();
+    })
+    .finally(() => clearTimeout(timeout))) as {
     tiles: Record<string, string>;
     sheets: Record<string, { src: string; rows: number; cols: number }>;
     singles: Record<string, string>;
@@ -187,18 +204,6 @@ export async function loadAssets(): Promise<Assets> {
       ui[k] = await loadImg(assetUrl(src));
     }),
   ]);
-  const missing = [
-    ...Object.entries(tiles)
-      .filter(([, v]) => !v)
-      .map(([k]) => k),
-    ...Object.entries(sheets)
-      .filter(([, v]) => !v)
-      .map(([k]) => k),
-    ...Object.entries(singles)
-      .filter(([, v]) => !v)
-      .map(([k]) => k),
-  ];
-  if (missing.length > 8) throw new Error("Could not load game art.");
   return { tiles, sheets, singles, ui };
 }
 
@@ -237,6 +242,8 @@ export class Engine {
   lastClick = { id: 0, t: 0 };
   holdAt = 0;
   pointerDragged = false;
+  touchBoxSelecting = false;
+  touchStart: { x: number; y: number } | null = null;
   touchUi = false;
   orderMark: { x: number; y: number; t: number; text: string } | null = null;
   cam = { x: 0, y: 0, z: 0.85 };
@@ -1663,7 +1670,7 @@ export class Engine {
   canPlace(type: string, tx: number, ty: number, team = 0) {
     const def = BUILDINGS[type];
     if (!def) return false;
-    if (this.age[team] < def.age) return false;
+    if (!this.buildingUnlocked(type, team)) return false;
     for (let y = ty; y < ty + def.th; y++) {
       for (let x = tx; x < tx + def.tw; x++) {
         if (x < 1 || y < 1 || x >= this.w - 1 || y >= this.h - 1) return false;
@@ -1672,6 +1679,18 @@ export class Engine {
       }
     }
     return true;
+  }
+
+  buildingUnlocked(type: string, team = 0) {
+    const def = BUILDINGS[type];
+    if (!def) return false;
+    if (this.age[team] >= def.age) return true;
+    return (
+      type === "farm" &&
+      this.ents.some(
+        (e) => e.kind === "bld" && e.team === team && e.type === "granary" && e.done && e.hp > 0,
+      )
+    );
   }
 
   tryPlace(type: string, wx: number, wy: number) {
@@ -2068,7 +2087,8 @@ export class Engine {
       if (e.kind !== "unit" || e.team !== 0) continue;
       if (e.x >= minx && e.x <= maxx && e.y >= miny && e.y <= maxy) ids.push(e.id);
     }
-    if (ids.length) this.selected = ids;
+    this.selected = ids;
+    return ids;
   }
 
   onDown = (ev: PointerEvent) => {
@@ -2082,8 +2102,12 @@ export class Engine {
     this.pointers.set(ev.pointerId, { x, y });
     this.holdAt = performance.now();
     this.pointerDragged = false;
+    this.touchBoxSelecting = false;
+    this.touchStart = touch ? { x, y } : null;
     if (this.pointers.size === 2) {
       this.pointerDragged = true;
+      this.touchBoxSelecting = false;
+      this.touchStart = null;
       const pts = [...this.pointers.values()];
       this.pinch = { d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y), z: this.cam.z };
       this.holdAt = 0;
@@ -2126,7 +2150,19 @@ export class Engine {
     if (touch && this.mouse.down && this.pointers.size === 1 && !this.placing) {
       const dx = x - this.mouse.x;
       const dy = y - this.mouse.y;
-      if (Math.hypot(dx, dy) > 2) {
+      const start = this.touchStart ?? { x: this.mouse.x, y: this.mouse.y };
+      const total = Math.hypot(x - start.x, y - start.y);
+      if (
+        !this.touchBoxSelecting &&
+        !this.pointerDragged &&
+        total >= TOUCH_DRAG_THRESHOLD &&
+        this.holdAt > 0 &&
+        performance.now() - this.holdAt >= TOUCH_SELECT_HOLD_MS
+      ) {
+        this.touchBoxSelecting = true;
+        this.pointerDragged = true;
+        this.commandMode = null;
+      } else if (!this.touchBoxSelecting && total >= TOUCH_DRAG_THRESHOLD) {
         this.pointerDragged = true;
         this.cam.x -= dx / this.cam.z;
         this.cam.y -= dy / this.cam.z;
@@ -2143,6 +2179,7 @@ export class Engine {
   };
 
   onUp = (ev: PointerEvent) => {
+    const cancelled = ev.type === "pointercancel";
     this.pointers.delete(ev.pointerId);
     if (this.pointers.size < 2) this.pinch = null;
     const rect = this.canvas.getBoundingClientRect();
@@ -2156,6 +2193,13 @@ export class Engine {
     }
     if (!this.mouse.down) return;
     this.mouse.down = false;
+    if (cancelled) {
+      this.touchBoxSelecting = false;
+      this.touchStart = null;
+      this.pointerDragged = false;
+      this.holdAt = 0;
+      return;
+    }
     if (this.placing) {
       this.commandMode = null;
       this.confirmPlace(w.x, w.y);
@@ -2166,11 +2210,24 @@ export class Engine {
     const touch = this.isTouchPtr(ev);
     const moved = Math.hypot(dx, dy);
     this.holdAt = 0;
+    if (touch && this.touchBoxSelecting) {
+      const ids = this.boxSelect(this.mouse.sx, this.mouse.sy, w.x, w.y);
+      this.touchBoxSelecting = false;
+      this.touchStart = null;
+      this.pointerDragged = false;
+      if (ids.length) audio.click();
+      return;
+    }
     if (moved > 18 && !touch) {
       this.boxSelect(this.mouse.sx, this.mouse.sy, w.x, w.y);
       return;
     }
-    if (touch && (moved > 16 || this.pointerDragged)) return;
+    if (touch && (moved > 16 || this.pointerDragged)) {
+      this.touchStart = null;
+      this.pointerDragged = false;
+      return;
+    }
+    this.touchStart = null;
     let hit = this.hitEnt(w.x, w.y, true, touch ? 14 / this.cam.z : 0);
     const villsOn = this.selected.some((id) => this.byId(id)?.type === "villager");
     const unitsOn = this.selected.some(
@@ -2349,7 +2406,14 @@ export class Engine {
       return;
     }
     if (id.startsWith("build:")) {
-      this.placing = id.slice(6);
+      const type = id.slice(6);
+      if (!this.buildingUnlocked(type, 0)) {
+        this.pushMsg(
+          type === "farm" ? "Build a Granary to unlock farms." : "Advance in age first.",
+        );
+        return;
+      }
+      this.placing = type;
       return;
     }
     if (id.startsWith("train:")) {
@@ -2492,6 +2556,8 @@ export class Engine {
     const blds = this.selected
       .map((id) => this.byId(id))
       .filter((e) => e?.kind === "bld" && e.team === 0);
+    if (blds.some((e) => e?.type === "granary" && e.done))
+      return "Choose Farm below, then tap the field to place it.";
     if (vills.length)
       return "Choose Move or a work command below. You can also tap a resource or animal directly.";
     if (units.length) return "Choose Move below, or tap an enemy directly.";
@@ -2537,7 +2603,7 @@ export class Engine {
       if (this.age[0] >= 1) list.splice(4, 0, "town_center");
       for (const id of list) {
         const d = BUILDINGS[id];
-        if (this.age[0] < d.age && id !== "town_center") continue;
+        if (!this.buildingUnlocked(id, 0) && id !== "town_center") continue;
         acts.push({
           id: `build:${id}`,
           label: d.name,
@@ -2546,6 +2612,18 @@ export class Engine {
           sprite: id,
         });
       }
+    }
+    if (blds.some((s) => s.type === "granary" && s.done)) {
+      const farm = BUILDINGS.farm;
+      const cost = scaleCost(farm.cost, civCostMul(this.civ[0], "build"));
+      if (!acts.some((a) => a.id === "build:farm"))
+        acts.push({
+          id: "build:farm",
+          label: farm.name,
+          cost,
+          disabled: !canAfford(this.stock[0], cost),
+          sprite: "farm",
+        });
     }
     for (const b of blds) {
       const def = BUILDINGS[b.type];
@@ -2652,7 +2730,12 @@ export class Engine {
     }
 
     if (this.placing) this.drawGhost(z);
-    if (this.mouse.down && !this.placing && !this.mouse.right && !this.touchUi) {
+    if (
+      this.mouse.down &&
+      !this.placing &&
+      !this.mouse.right &&
+      (!this.touchUi || this.touchBoxSelecting)
+    ) {
       const a = this.worldToScreen(this.mouse.sx, this.mouse.sy);
       const b = { x: this.mouse.x, y: this.mouse.y };
       ctx.strokeStyle = "rgba(212,196,160,0.9)";

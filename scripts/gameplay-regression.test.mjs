@@ -102,6 +102,100 @@ test("touch taps deselect on empty ground until Move is chosen from the HUD", ()
   assert.equal(villager.task?.nodeId, resource.id);
 });
 
+test("touch supports hold-drag subset selection while preserving pan and double-tap", () => {
+  const engine = makeEngine();
+  const villagers = playerUnits(engine).filter((unit) => unit.type === "villager");
+  assert.equal(villagers.length, 3);
+  engine.touchUi = true;
+  engine.cam = { x: 0, y: 0, z: 1 };
+  Object.assign(villagers[0], { x: 120, y: 120 });
+  Object.assign(villagers[1], { x: 190, y: 180 });
+  Object.assign(villagers[2], { x: 360, y: 320 });
+
+  engine.onDown(touchPointer("pointerdown", 11, 80, 80));
+  engine.holdAt = performance.now() - 500;
+  engine.onMove(touchPointer("pointermove", 11, 240, 240));
+  assert.equal(engine.touchBoxSelecting, true, "a held drag should enter marquee mode");
+  assert.equal(engine.cam.x, 0, "marquee selection must not pan the map");
+  engine.onUp(touchPointer("pointerup", 11, 240, 240));
+  assert.deepEqual(
+    engine.selected,
+    [villagers[0].id, villagers[1].id],
+    "the marquee should select exactly the units inside it",
+  );
+  assert.equal(engine.touchBoxSelecting, false);
+
+  engine.lastClick = { id: 0, t: 0 };
+  tapWorld(engine, villagers[0]);
+  tapWorld(engine, villagers[0]);
+  assert.deepEqual(
+    engine.selected,
+    villagers.map((villager) => villager.id),
+    "double-tap should still select every unit of the tapped type",
+  );
+
+  engine.cam = { x: 0, y: 0, z: 1 };
+  engine.onDown(touchPointer("pointerdown", 12, 500, 400));
+  engine.onMove(touchPointer("pointermove", 12, 440, 400));
+  assert.equal(engine.touchBoxSelecting, false, "an immediate drag should remain a pan gesture");
+  assert.ok(engine.cam.x > 0, "the immediate drag should move the camera");
+  engine.onUp(touchPointer("pointerup", 12, 440, 400));
+});
+
+test("a completed Granary unlocks placeable food-producing Farms in the Dawn Age", () => {
+  const engine = makeEngine();
+  const townCenter = playerBuilding(engine, "town_center");
+  const villager = playerUnits(engine).find((unit) => unit.type === "villager");
+  assert.ok(villager);
+  assert.equal(engine.age[0], 0);
+  assert.equal(engine.buildingUnlocked("farm", 0), false);
+
+  engine.selected = [villager.id];
+  engine.doAction("build:farm");
+  assert.equal(engine.placing, null, "a Farm should require a completed Granary");
+
+  const granary = placeBuildingNear(engine, "granary", townCenter);
+  assert.equal(engine.buildingUnlocked("farm", 0), true);
+  engine.selected = [granary.id];
+  const granaryFarm = engine.snapshot().actions.find((action) => action.id === "build:farm");
+  assert.ok(granaryFarm, "selecting a completed Granary should expose its Farm action");
+  assert.equal(granaryFarm.disabled, false);
+
+  engine.selected = [villager.id];
+  assert.ok(
+    engine.snapshot().actions.some((action) => action.id === "build:farm"),
+    "villagers should also gain Farm construction after a Granary is complete",
+  );
+
+  engine.selected = [granary.id];
+  engine.doAction("build:farm");
+  assert.equal(engine.placing, "farm");
+  const site = findBuildingSiteNear(engine, "farm", granary);
+  const woodBefore = engine.stock[0].wood;
+  engine.confirmPlace((site.tx + 1.5) * 48, (site.ty + 1.5) * 48);
+  const farm = engine.ents.find(
+    (ent) => ent.kind === "bld" && ent.team === 0 && ent.type === "farm" && !ent.done,
+  );
+  assert.ok(farm, "the Farm action should create a construction site");
+  assert.equal(engine.stock[0].wood, woodBefore - 75);
+
+  const builder = playerUnits(engine).find(
+    (unit) => unit.type === "villager" && unit.task?.t === "build" && unit.task.bldId === farm.id,
+  );
+  assert.ok(builder, "a nearby villager should be assigned to build the Farm");
+  const workPoint = safeAdjacentPoint(engine, farm);
+  builder.x = workPoint.x;
+  builder.y = workPoint.y;
+  farm.progress = 0.99;
+  assert.ok(
+    runUntil(engine, () => farm.done, 30),
+    "the Farm should complete normally",
+  );
+  assert.ok(farm.amount > 0, "a completed Farm should contain gatherable food");
+  assert.equal(builder.task?.t, "gather");
+  assert.equal(builder.task?.nodeId, farm.id);
+});
+
 test("a trained villager appears safely outside the Town Center and stays visible", () => {
   const engine = makeEngine();
   const townCenter = playerBuilding(engine, "town_center");
@@ -360,6 +454,20 @@ function tapWorld(engine, point) {
   });
 }
 
+function touchPointer(type, pointerId, clientX, clientY) {
+  return {
+    type,
+    pointerId,
+    pointerType: "touch",
+    clientX,
+    clientY,
+    button: 0,
+    ctrlKey: false,
+    shiftKey: false,
+    preventDefault() {},
+  };
+}
+
 function safePointAtDistance(engine, origin, min, max) {
   for (let ty = 1; ty < engine.h - 1; ty++) {
     for (let tx = 1; tx < engine.w - 1; tx++) {
@@ -386,6 +494,11 @@ function safeAdjacentPoint(engine, target) {
 }
 
 function placeBuildingNear(engine, type, near) {
+  const { tx, ty } = findBuildingSiteNear(engine, type, near);
+  return engine.spawnBld(type, 0, tx, ty, true);
+}
+
+function findBuildingSiteNear(engine, type, near) {
   for (let radius = 5; radius <= 16; radius++) {
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
@@ -398,7 +511,7 @@ function placeBuildingNear(engine, type, near) {
           const uy = Math.floor(unit.y / 48);
           return ux >= tx && ux < tx + 4 && uy >= ty && uy < ty + 3;
         });
-        if (!occupied) return engine.spawnBld(type, 0, tx, ty, true);
+        if (!occupied) return { tx, ty };
       }
     }
   }

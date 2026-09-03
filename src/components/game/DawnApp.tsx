@@ -8,6 +8,7 @@ import { HudOverlay } from "./HudOverlay";
 type Screen = "title" | "play" | "how" | "settings";
 
 const SAVE = "dawn-empires-v1";
+const FALLBACK_ASSETS: Assets = { tiles: {}, sheets: {}, singles: {}, ui: {} };
 
 function loadSave() {
   try {
@@ -62,7 +63,7 @@ export function DawnApp() {
   const [civ, setCiv] = useState<CivId>("aegean");
   const [difficulty, setDifficulty] = useState<0 | 1 | 2>(1);
   const [assets, setAssets] = useState<Assets | null>(null);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const [gameAssets, setGameAssets] = useState<Assets | null>(null);
   const [hud, setHud] = useState<HudSnapshot | null>(null);
   const [cfg, setCfg] = useState<GameConfig | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -77,19 +78,19 @@ export function DawnApp() {
     audio.setMuted(s.muted);
     void loadAssets()
       .then(setAssets)
-      .catch((e: unknown) => setLoadErr(e instanceof Error ? e.message : "Could not load art"));
+      .catch(() => setAssets(FALLBACK_ASSETS));
   }, []);
 
   useEffect(() => {
-    if (screen !== "play" || !cfg || !assets || !canvasRef.current) return;
-    const engine = new Engine(canvasRef.current, assets, cfg, setHud);
+    if (screen !== "play" || !cfg || !gameAssets || !canvasRef.current) return;
+    const engine = new Engine(canvasRef.current, gameAssets, cfg, setHud);
     engineRef.current = engine;
     engine.start();
     return () => {
       engine.destroy();
       engineRef.current = null;
     };
-  }, [screen, cfg, assets]);
+  }, [screen, cfg, gameAssets]);
 
   const persist = (patch: Partial<typeof save>) => {
     const next = { ...save, ...patch, version: 1 as const };
@@ -104,9 +105,9 @@ export function DawnApp() {
   const enemyCiv = (CIVS.find((c) => c.id !== civ) ?? CIVS[0]).id;
 
   const begin = () => {
-    if (!assets) return;
     audio.unlock();
     persist({ civ });
+    setGameAssets(assets ?? FALLBACK_ASSETS);
     setCfg({
       mode: "skirmish",
       mission: 0,
@@ -129,14 +130,7 @@ export function DawnApp() {
           onPlay={begin}
           onHow={() => setScreen("how")}
           onSettings={() => setScreen("settings")}
-          ready={!!assets}
         />
-        {!assets && !loadErr && (
-          <p className="pointer-events-none absolute bottom-4 left-5 text-xs text-parchment-dim">
-            Loading the field…
-          </p>
-        )}
-        {loadErr && <p className="absolute bottom-4 left-5 text-xs text-blood">{loadErr}</p>}
       </>
     );
   }
@@ -152,8 +146,10 @@ export function DawnApp() {
           </p>
           <p>
             On a tablet or phone: tap a villager to select, then tap a tree, berry bush, gold pile,
-            or stone to gather. Tap the ground to move. Drag with one finger to pan, pinch to zoom.
-            Double-tap a villager to select all of that type.
+            stone, animal, or enemy to interact. Tap open ground to clear the selection; choose Move
+            below before tapping a destination. Quickly drag with one finger to pan, or press and
+            hold before dragging a box around a fixed group. Pinch to zoom. Double-tap a unit to
+            select all units of that type.
           </p>
           <p>
             You can also use the buttons along the bottom: Forage, Chop wood, Mine gold, Mine stone,
@@ -265,6 +261,7 @@ export function DawnApp() {
             engineRef.current = null;
             setHud(null);
             setCfg(null);
+            setGameAssets(null);
             setScreen("title");
           }}
         />

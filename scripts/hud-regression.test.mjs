@@ -8,6 +8,16 @@ const hudSource = await readFile(
 );
 const styleSource = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
 const engineSource = await readFile(new URL("../src/game/engine.ts", import.meta.url), "utf8");
+const appSource = await readFile(
+  new URL("../src/components/game/DawnApp.tsx", import.meta.url),
+  "utf8",
+);
+const titleSource = await readFile(
+  new URL("../src/components/game/TitleScreen.tsx", import.meta.url),
+  "utf8",
+);
+const indexSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
+const viteSource = await readFile(new URL("../vite.config.ts", import.meta.url), "utf8");
 
 test("the command menu reflows without hiding actions horizontally", () => {
   assert.match(hudSource, /data-testid="command-grid"/);
@@ -29,4 +39,19 @@ test("touch movement is explicit and empty-ground taps can clear selection", () 
   assert.match(engineSource, /this\.isOrderTarget\(hit, false\)/);
   assert.match(engineSource, /else if \(!ev\.shiftKey\) this\.selected = \[\];/);
   assert.match(engineSource, /this\.commandMode = this\.commandMode === next \? null : next;/);
+});
+
+test("Play starts immediately with fallback art and asset loading cannot hang forever", () => {
+  assert.doesNotMatch(titleSource, /disabled=\{!ready\}|Illuminating the map/);
+  assert.match(appSource, /setGameAssets\(assets \?\? FALLBACK_ASSETS\)/);
+  assert.match(appSource, /new Engine\(canvasRef\.current, gameAssets, cfg, setHud\)/);
+  assert.match(engineSource, /ASSET_LOAD_TIMEOUT_MS = 8_000/);
+  assert.match(engineSource, /controller\.abort\(\)/);
+});
+
+test("production loads one cache-busted application bundle", () => {
+  assert.equal(indexSource.match(/src="\/src\/main\.tsx"/g)?.length, 1);
+  assert.doesNotMatch(indexSource, /createElement\("script"\)|www\/game\.js/);
+  assert.match(viteSource, /entryFileNames: "www\/game-\[hash\]\.js"/);
+  assert.match(viteSource, /game-\[hash\]\[extname\]/);
 });

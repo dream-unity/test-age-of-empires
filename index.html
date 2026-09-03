@@ -13,28 +13,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Vite dev entry. GitHub Pages ignores this 404 and loads ./www/game.js below. -->
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      (function () {
-        var host = location.hostname;
-        var dev =
-          location.port === "8080" ||
-          host === "localhost" ||
-          host === "127.0.0.1" ||
-          host === "0.0.0.0";
-        if (dev) return;
-        var root = location.pathname.indexOf("/test-age-of-empires") === 0 ? "/test-age-of-empires/" : "./";
-        var css = document.createElement("link");
-        css.rel = "stylesheet";
-        css.href = root + "www/game.css";
-        document.head.appendChild(css);
-        var play = document.createElement("script");
-        play.type = "module";
-        play.crossOrigin = "anonymous";
-        play.src = root + "www/game.js";
-        document.body.appendChild(play);
-      })();
-    </script>
   </body>
 </html>

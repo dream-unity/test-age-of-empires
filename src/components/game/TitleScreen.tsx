@@ -10,7 +10,6 @@ type Props = {
   onPlay: () => void;
   onHow: () => void;
   onSettings: () => void;
-  ready?: boolean;
 };
 
 export function TitleScreen({
@@ -21,7 +20,6 @@ export function TitleScreen({
   onPlay,
   onHow,
   onSettings,
-  ready = true,
 }: Props) {
   const selected = CIVS.find((c) => c.id === civ) ?? CIVS[0];
 
@@ -53,8 +51,7 @@ export function TitleScreen({
           <button
             type="button"
             onClick={onPlay}
-            disabled={!ready}
-            className="min-h-16 min-w-56 rounded-md border border-bronze bg-wood/90 px-12 py-4 text-center font-display text-2xl tracking-[0.18em] text-parchment shadow-[0_0_32px_rgba(174,125,57,0.18)] backdrop-blur-sm transition-all duration-200 hover:bg-wood-light hover:shadow-[0_0_40px_rgba(174,125,57,0.3)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bronze disabled:cursor-wait disabled:opacity-40"
+            className="min-h-16 min-w-56 rounded-md border border-bronze bg-wood/90 px-12 py-4 text-center font-display text-2xl tracking-[0.18em] text-parchment shadow-[0_0_32px_rgba(174,125,57,0.18)] backdrop-blur-sm transition-all duration-200 hover:bg-wood-light hover:shadow-[0_0_40px_rgba(174,125,57,0.3)] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-bronze"
           >
             Play
           </button>
@@ -64,7 +61,6 @@ export function TitleScreen({
           <nav className="flex flex-col gap-2">
             <MenuBtn onClick={onHow}>How to Play</MenuBtn>
             <MenuBtn onClick={onSettings}>Settings</MenuBtn>
-            {!ready && <p className="px-1 pt-1 text-xs text-bronze">Illuminating the map…</p>}
           </nav>
 
           <section className="rounded-lg border border-bronze/25 bg-wood/80 p-4 backdrop-blur-sm sm:p-5">
