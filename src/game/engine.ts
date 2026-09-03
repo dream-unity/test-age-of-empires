@@ -90,6 +90,7 @@ export type HudAction = {
   cost?: Cost;
   disabled?: boolean;
   sprite?: string;
+  active?: boolean;
 };
 
 export type HudSnapshot = {
@@ -119,6 +120,7 @@ export type HudSnapshot = {
   actions: HudAction[];
   messages: { id: number; text: string }[];
   placing: string | null;
+  commandMode: "move" | "rally" | null;
   paused: boolean;
   outcome: "playing" | "win" | "lose";
   objective: string;
@@ -229,6 +231,7 @@ export class Engine {
   civ: [CivId, CivId] = ["aegean", "nile"];
   selected: number[] = [];
   placing: string | null = null;
+  commandMode: "move" | "rally" | null = null;
   placeOk = false;
   mouse = { x: 200, y: 200, wx: 0, wy: 0, down: false, right: false, sx: 0, sy: 0, inside: false };
   lastClick = { id: 0, t: 0 };
@@ -282,11 +285,7 @@ export class Engine {
     this.centerOnTeam(0);
     this.revealAroundTeam(0);
     this.touchUi = this.isTouchPtr();
-    this.pushMsg(
-      this.touchUi
-        ? "Tap a villager, then tap the field or a resource."
-        : "Villagers are ready. Command them.",
-    );
+    this.pushMsg("Villagers are ready.");
   }
 
   grid(): Grid {
@@ -2102,6 +2101,7 @@ export class Engine {
     this.mouse.right = ev.button === 2 || ev.ctrlKey;
     if (ev.button === 2) {
       ev.preventDefault();
+      this.commandMode = null;
       if (this.placing) {
         this.placing = null;
         return;
@@ -2157,6 +2157,7 @@ export class Engine {
     if (!this.mouse.down) return;
     this.mouse.down = false;
     if (this.placing) {
+      this.commandMode = null;
       this.confirmPlace(w.x, w.y);
       return;
     }
@@ -2164,7 +2165,6 @@ export class Engine {
     const dy = w.y - this.mouse.sy;
     const touch = this.isTouchPtr(ev);
     const moved = Math.hypot(dx, dy);
-    const held = this.holdAt > 0 && performance.now() - this.holdAt > 400;
     this.holdAt = 0;
     if (moved > 18 && !touch) {
       this.boxSelect(this.mouse.sx, this.mouse.sy, w.x, w.y);
@@ -2184,6 +2184,12 @@ export class Engine {
     const now = performance.now();
     const dbl = !!(hit && hit.id === this.lastClick.id && now - this.lastClick.t < 360);
     this.lastClick = { id: hit?.id ?? 0, t: now };
+    if (this.commandMode && !hit) {
+      this.commandMode = null;
+      this.issueCommand(w.x, w.y, null);
+      return;
+    }
+    if (this.commandMode) this.commandMode = null;
     if (dbl && hit && hit.team === 0) {
       if (hit.kind === "bld" && hit.type === "town_center") {
         this.selected = this.ents
@@ -2197,7 +2203,7 @@ export class Engine {
       audio.click();
       return;
     }
-    if (this.isOrderTarget(hit, touch || held)) {
+    if (this.isOrderTarget(hit, false)) {
       this.issueCommand(w.x, w.y, hit);
       return;
     }
@@ -2209,7 +2215,7 @@ export class Engine {
         if (!this.selected.includes(hit.id)) this.selected.push(hit.id);
       } else this.selected = [hit.id];
       audio.click();
-    } else if (!ev.shiftKey && !touch) this.selected = [];
+    } else if (!ev.shiftKey) this.selected = [];
   };
 
   onWheel = (ev: WheelEvent) => {
@@ -2235,6 +2241,7 @@ export class Engine {
     }
     if (ev.code === "Escape") {
       if (this.placing) this.placing = null;
+      else if (this.commandMode) this.commandMode = null;
       else this.selected = [];
     }
     if (ev.code === "Period") this.selectIdleVillager();
@@ -2304,6 +2311,13 @@ export class Engine {
   doAction(id: string) {
     audio.unlock();
     audio.click();
+    if (id === "move" || id === "rally") {
+      const next = id as "move" | "rally";
+      this.placing = null;
+      this.commandMode = this.commandMode === next ? null : next;
+      return;
+    }
+    this.commandMode = null;
     if (id === "stop") {
       this.selected.forEach((sid) => {
         const e = this.byId(sid);
@@ -2453,6 +2467,7 @@ export class Engine {
       actions: this.actionsFor(selected),
       messages: this.messages.map(({ id, text }) => ({ id, text })),
       placing: this.placing,
+      commandMode: this.commandMode,
       paused: this.paused,
       outcome: this.outcome,
       objective: this.objectives.filter((o) => !o.done)[0]?.text ?? "Hold the field.",
@@ -2478,11 +2493,11 @@ export class Engine {
       .map((id) => this.byId(id))
       .filter((e) => e?.kind === "bld" && e.team === 0);
     if (vills.length)
-      return "Tap a tree, berry bush, gold, or stone to gather. Tap the ground to move. Or use Forage / Chop / Mine.";
-    if (units.length) return "Tap an enemy to attack, or tap the ground to march.";
-    if (blds.length) return "Train below, or tap the field to set a rally point.";
+      return "Choose Move or a work command below. You can also tap a resource or animal directly.";
+    if (units.length) return "Choose Move below, or tap an enemy directly.";
+    if (blds.length) return "Train below, or choose Set rally before tapping open ground.";
     return this.touchUi
-      ? "Tap a villager to select, then tap a tree, berry bush, or mine."
+      ? "Tap a unit or building to select it. Tapping open ground clears the selection."
       : "Select villagers to gather and build. Right-click or tap a resource to command.";
   }
 
@@ -2492,6 +2507,9 @@ export class Engine {
     const blds = sel.filter((s) => s.kind === "bld" && s.team === 0);
     const vills = units.filter((s) => s.type === "villager");
     if (this.placing) acts.push({ id: "cancel", label: "Cancel place" });
+    if (units.length) acts.push({ id: "move", label: "Move", active: this.commandMode === "move" });
+    if (blds.some((s) => s.done))
+      acts.push({ id: "rally", label: "Set rally", active: this.commandMode === "rally" });
     if (vills.length || blds.some((s) => s.type === "town_center")) {
       acts.push(
         { id: "gather:berry", label: "Forage" },

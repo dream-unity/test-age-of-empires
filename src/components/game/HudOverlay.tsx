@@ -21,7 +21,16 @@ const RES: { key: "food" | "wood" | "gold" | "stone"; src: string; label: string
   { key: "stone", src: assetUrl("game/ui/stone.png"), label: "Stone" },
 ];
 
-export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onResume, onQuit }: Props) {
+export function HudOverlay({
+  hud,
+  engine,
+  muted,
+  onMute,
+  onAction,
+  onMenu,
+  onResume,
+  onQuit,
+}: Props) {
   const miniRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -44,7 +53,10 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between text-parchment">
       <div className="pointer-events-auto flex flex-wrap items-center gap-2 border-b border-bronze/25 bg-wood/92 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur-sm sm:gap-4 sm:px-4">
         {RES.map((r) => (
-          <div key={r.key} className="flex items-center gap-1.5 font-display text-sm tabular-nums sm:text-base">
+          <div
+            key={r.key}
+            className="flex items-center gap-1.5 font-display text-sm tabular-nums sm:text-base"
+          >
             <img src={r.src} alt="" className="size-7 object-contain sm:size-8" />
             <span className="min-w-8">{hud[r.key]}</span>
             <span className="sr-only">{r.label}</span>
@@ -53,7 +65,9 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
         <div className="font-display text-sm tabular-nums text-bronze">
           {hud.pop}/{hud.popCap}
         </div>
-        <div className="hidden font-display text-sm tracking-wide text-parchment-dim sm:block">{hud.ageName}</div>
+        <div className="hidden font-display text-sm tracking-wide text-parchment-dim sm:block">
+          {hud.ageName}
+        </div>
         <div className="ml-auto flex items-center gap-1.5">
           {hud.idleVillagers > 0 && (
             <button
@@ -64,10 +78,20 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
               Idle {hud.idleVillagers}
             </button>
           )}
-          <button type="button" onClick={onMute} className="min-h-11 min-w-11 rounded-sm p-2 text-parchment-dim hover:text-parchment" aria-label="Mute">
+          <button
+            type="button"
+            onClick={onMute}
+            className="min-h-11 min-w-11 rounded-sm p-2 text-parchment-dim hover:text-parchment"
+            aria-label="Mute"
+          >
             {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
           </button>
-          <button type="button" onClick={onMenu} className="min-h-11 min-w-11 rounded-sm p-2 text-parchment-dim hover:text-parchment" aria-label="Pause">
+          <button
+            type="button"
+            onClick={onMenu}
+            className="min-h-11 min-w-11 rounded-sm p-2 text-parchment-dim hover:text-parchment"
+            aria-label="Pause"
+          >
             <Pause className="size-4" />
           </button>
         </div>
@@ -87,13 +111,10 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
         </ul>
       </div>
 
-      <div className="pointer-events-none px-3">
-        <p className="mx-auto max-w-xl rounded-md bg-ink/75 px-3 py-2 text-center text-xs text-parchment sm:text-sm">
-          {hud.hint}
-        </p>
-      </div>
-
-      <div className="pointer-events-auto mt-auto flex max-h-[42vh] items-stretch gap-0 border-t border-bronze/25 bg-wood/94 pb-[max(0.4rem,env(safe-area-inset-bottom))] backdrop-blur-sm">
+      <div
+        data-testid="command-panel"
+        className="pointer-events-auto mt-auto flex max-h-[50dvh] min-h-0 items-stretch gap-0 border-t border-bronze/25 bg-wood/94 pb-[max(0.4rem,env(safe-area-inset-bottom))] backdrop-blur-sm"
+      >
         <button
           type="button"
           className="relative shrink-0 border-r border-bronze/20"
@@ -113,8 +134,8 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
           />
         </button>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden p-2 sm:p-3">
-          <div className="flex min-h-10 items-center gap-3">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 overflow-hidden p-2 sm:p-3">
+          <div className="flex min-h-10 shrink-0 items-center gap-3">
             {sel ? (
               <>
                 <div className="min-w-0">
@@ -125,7 +146,9 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
                     <div className="mt-1 h-1.5 w-36 max-w-full overflow-hidden rounded-sm bg-ink">
                       <div
                         className="h-full bg-moss"
-                        style={{ width: `${Math.max(0, Math.min(100, (sel.hp / sel.maxHp) * 100))}%` }}
+                        style={{
+                          width: `${Math.max(0, Math.min(100, (sel.hp / sel.maxHp) * 100))}%`,
+                        }}
                       />
                     </div>
                   )}
@@ -144,20 +167,32 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
             ) : (
               <p className="text-sm text-parchment-dim">{hud.hint}</p>
             )}
-            {hud.placing && <p className="text-xs text-bronze">Placing {hud.placing.replace("_", " ")}</p>}
+            {hud.placing && (
+              <p className="text-xs text-bronze">Placing {hud.placing.replace("_", " ")}</p>
+            )}
+            {hud.commandMode && (
+              <p className="text-xs text-bronze" role="status">
+                {hud.commandMode === "move"
+                  ? "Move selected — tap open ground"
+                  : "Set rally — tap open ground"}
+              </p>
+            )}
           </div>
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto pb-1">
+          <div data-testid="command-grid" className="game-command-grid min-h-0 flex-1">
             {hud.actions.map((a) => (
               <button
                 key={a.id + a.label}
                 type="button"
                 disabled={a.disabled}
+                aria-pressed={a.id === "move" || a.id === "rally" ? !!a.active : undefined}
                 onPointerUp={(ev) => {
                   ev.preventDefault();
                   ev.stopPropagation();
                   if (!a.disabled) onAction(a.id);
                 }}
-                className="flex min-h-12 shrink-0 items-center gap-1.5 rounded-sm border border-bronze/30 bg-wood-mid px-3 py-2 text-left text-xs leading-tight text-parchment enabled:hover:border-bronze disabled:opacity-40"
+                className={`flex min-h-12 min-w-0 items-center gap-1.5 rounded-sm border px-2 py-2 text-left text-xs leading-tight text-parchment enabled:hover:border-bronze disabled:opacity-40 ${
+                  a.active ? "border-bronze bg-wood-light" : "border-bronze/30 bg-wood-mid"
+                }`}
               >
                 {a.sprite && (
                   <span className="relative size-8 shrink-0 overflow-hidden rounded-sm bg-ink/60">
@@ -172,8 +207,8 @@ export function HudOverlay({ hud, engine, muted, onMute, onAction, onMenu, onRes
                     />
                   </span>
                 )}
-                <span className="min-w-0">
-                  <span className="block font-display">{a.label}</span>
+                <span className="min-w-0 overflow-hidden">
+                  <span className="block break-words font-display">{a.label}</span>
                   {a.cost && (
                     <span className="text-parchment-dim">
                       {Object.entries(a.cost)

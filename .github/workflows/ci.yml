@@ -16,3 +16,4 @@ jobs:
       - run: npm install
       - run: npm run typecheck
       - run: npm run test:game
+      - run: npm run test:hud

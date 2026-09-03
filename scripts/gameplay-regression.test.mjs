@@ -56,6 +56,52 @@ test("starting villagers are idle and obey a move order", () => {
   assertActorSafe(engine, lead);
 });
 
+test("touch taps deselect on empty ground until Move is chosen from the HUD", () => {
+  const engine = makeEngine();
+  const villager = playerUnits(engine)[0];
+  const destination = findReachableOrder(engine, [villager.id], villager, 240);
+  villager.task = null;
+  engine.touchUi = true;
+  engine.selected = [villager.id];
+
+  tapWorld(engine, destination);
+  assert.deepEqual(engine.selected, [], "an ordinary empty-ground tap should clear selection");
+  assert.equal(villager.task, null, "deselecting must not silently issue a move order");
+
+  engine.selected = [villager.id];
+  engine.doAction("move");
+  assert.equal(engine.commandMode, "move");
+  tapWorld(engine, destination);
+  assert.deepEqual(engine.selected, [villager.id]);
+  assert.equal(engine.commandMode, null, "Move mode should finish after choosing a destination");
+  assert.equal(villager.task?.t, "move", "the explicit Move action should issue the route");
+
+  const townCenter = playerBuilding(engine, "town_center");
+  townCenter.rallySet = false;
+  engine.selected = [townCenter.id];
+  tapWorld(engine, destination);
+  assert.deepEqual(engine.selected, [], "empty ground should also deselect a building");
+  assert.equal(townCenter.rallySet, false, "deselecting must not silently set a rally point");
+
+  engine.selected = [townCenter.id];
+  engine.doAction("rally");
+  tapWorld(engine, destination);
+  assert.equal(townCenter.rallySet, true, "Set rally should explicitly enable the next ground tap");
+
+  const resource = engine.ents.find(
+    (ent) => ent.kind === "node" && ent.amount > 0 && engine.seenByPlayer(ent),
+  );
+  assert.ok(resource, "a visible resource should exist for direct touch commands");
+  villager.task = null;
+  engine.selected = [villager.id];
+  tapWorld(engine, {
+    x: resource.x,
+    y: resource.type === "tree" ? resource.y - 18 : resource.y,
+  });
+  assert.equal(villager.task?.t, "gather", "tapping a relevant resource should still command it");
+  assert.equal(villager.task?.nodeId, resource.id);
+});
+
 test("a trained villager appears safely outside the Town Center and stays visible", () => {
   const engine = makeEngine();
   const townCenter = playerBuilding(engine, "town_center");
@@ -275,7 +321,11 @@ function findReachableOrder(engine, ids, origin, minimumDistance) {
     for (let tx = 1; tx < engine.w - 1; tx++) {
       const point = { x: (tx + 0.5) * 48, y: (ty + 0.5) * 48 };
       const distance = Math.hypot(point.x - origin.x, point.y - origin.y);
-      if (distance >= minimumDistance && engine.canUnitStand(point.x, point.y))
+      if (
+        distance >= minimumDistance &&
+        engine.canUnitStand(point.x, point.y) &&
+        !engine.hitEnt(point.x, point.y, true, 50)
+      )
         points.push({ ...point, distance });
     }
   }
@@ -286,6 +336,28 @@ function findReachableOrder(engine, ids, origin, minimumDistance) {
     if (unit?.task?.t === "move") return point;
   }
   assert.fail("could not find a reachable destination");
+}
+
+function tapWorld(engine, point) {
+  engine.cam.z = 1;
+  engine.cam.x = Math.max(0, Math.min(engine.w * 48 - engine.viewW, point.x - engine.viewW / 2));
+  engine.cam.y = Math.max(0, Math.min(engine.h * 48 - engine.viewH, point.y - engine.viewH / 2));
+  const clientX = point.x - engine.cam.x;
+  const clientY = point.y - engine.cam.y;
+  engine.mouse.down = true;
+  engine.mouse.right = false;
+  engine.mouse.sx = point.x;
+  engine.mouse.sy = point.y;
+  engine.pointerDragged = false;
+  engine.holdAt = performance.now();
+  engine.pointers.set(1, { x: clientX, y: clientY });
+  engine.onUp({
+    pointerId: 1,
+    pointerType: "touch",
+    clientX,
+    clientY,
+    shiftKey: false,
+  });
 }
 
 function safePointAtDistance(engine, origin, min, max) {
@@ -372,6 +444,7 @@ function mockCanvas() {
     height: 0,
     style: {},
     parentElement: { getBoundingClientRect: () => ({ width: 1400, height: 900 }) },
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 1400, height: 900 }),
     getContext: () => ({}),
     addEventListener() {},
     removeEventListener() {},
@@ -402,6 +475,37 @@ function installDomStubs() {
       matchMedia: () => ({ matches: false }),
       addEventListener() {},
       removeEventListener() {},
+      AudioContext: class {
+        state = "running";
+        currentTime = 0;
+        destination = {};
+        createGain() {
+          return {
+            gain: {
+              setTargetAtTime() {},
+              setValueAtTime() {},
+              exponentialRampToValueAtTime() {},
+            },
+            connect() {},
+            disconnect() {},
+          };
+        }
+        createOscillator() {
+          return {
+            type: "sine",
+            frequency: {
+              setValueAtTime() {},
+              exponentialRampToValueAtTime() {},
+            },
+            connect() {},
+            disconnect() {},
+            start() {},
+            stop() {},
+            onended: null,
+          };
+        }
+        resume() {}
+      },
     },
   });
   Object.defineProperty(globalThis, "navigator", {
